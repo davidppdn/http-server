@@ -15,8 +15,6 @@ class Program
             server = new(_address, _port);
             server.Start();
 
-            Byte[] buffer = new Byte[1024];
-
             while (true)
             {
                 Console.Write("Waiting for a connection... ");
@@ -25,38 +23,30 @@ class Program
                 Console.WriteLine("Connected!");
 
                 NetworkStream stream = client.GetStream();
-                StringBuilder request = new StringBuilder();
+                
+                StringBuilder requestBuffer = new StringBuilder();
+                Byte[] buffer = new Byte[1024];
+                int bytesRead;
 
-                int i;
-
-                while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
+                while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
-                    request.Append(Encoding.ASCII.GetString(buffer, 0, i));
+                    requestBuffer.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
 
-                    int len = request.Length;
-
-                    if (len >= 4 &&
-                        request[len - 4] == '\r' &&
-                        request[len - 3] == '\n' &&
-                        request[len - 2] == '\r' &&
-                        request[len - 1] == '\n')
+                    while (true)
                     {
-                        Console.WriteLine("FULL HTTP REQUEST:");
-                        Console.WriteLine(request.ToString());
+                        string current = requestBuffer.ToString();
+                        int requestEnd = current.IndexOf("\r\n\r\n");
 
-                        string body = "Hello from custom C# server";
+                        if (requestEnd == -1)
+                            break;
 
-                        string response =
-                            "HTTP/1.1 200 OK\r\n" +
-                            "Content-Type: text/plain\r\n" +
-                            $"Content-Length: {Encoding.ASCII.GetByteCount(body)}\r\n" +
-                            "\r\n" +
-                            body;
+                        string fullRequest = current.Substring(0, requestEnd + 4);
+                        requestBuffer.Remove(0, requestEnd + 4);
 
+                        var response = ProcessRequest(fullRequest);
                         byte[] msg = Encoding.ASCII.GetBytes(response);
-                        stream.Write(msg, 0, msg.Length);
 
-                        break;
+                        stream.Write(msg, 0, msg.Length);
                     }
                 }
             }
@@ -72,5 +62,16 @@ class Program
 
         Console.WriteLine("\nHit enter to continue...");
         Console.Read();
+    }
+
+    private static string ProcessRequest(string request)
+    {
+        Console.WriteLine(request);
+
+        return
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: text/plain\r\n" +
+            "\r\n" +
+            "Hello from server";
     }
 }
