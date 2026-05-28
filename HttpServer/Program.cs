@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 class Program
 {
@@ -11,13 +12,10 @@ class Program
         TcpListener? server = null;
         try
         {
-            // Create a TCP/IP socket, and start listening for incoming connections.
             server = new(_address, _port);
             server.Start();
 
-            // Buffer for reading data
-            Byte[] bytes = new Byte[256];
-            String? data = null;
+            Byte[] buffer = new Byte[1024];
 
             while (true)
             {
@@ -26,22 +24,40 @@ class Program
                 using TcpClient client = server.AcceptTcpClient();
                 Console.WriteLine("Connected!");
 
-                data = null;
-
                 NetworkStream stream = client.GetStream();
+                StringBuilder request = new StringBuilder();
 
                 int i;
 
-                while ((i = stream.Read(bytes, 0, bytes.Length)) != 0)
+                while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
-                    data = System.Text.Encoding.ASCII.GetString(bytes, 0, i);
-                    Console.WriteLine("Received: {0}", data);
+                    request.Append(Encoding.ASCII.GetString(buffer, 0, i));
 
-                    data = data.ToUpper();
+                    int len = request.Length;
 
-                    byte[] msg = System.Text.Encoding.ASCII.GetBytes(data);
-                    stream.Write(msg, 0, msg.Length);
-                    Console.WriteLine("Sent: {0}", data);
+                    if (len >= 4 &&
+                        request[len - 4] == '\r' &&
+                        request[len - 3] == '\n' &&
+                        request[len - 2] == '\r' &&
+                        request[len - 1] == '\n')
+                    {
+                        Console.WriteLine("FULL HTTP REQUEST:");
+                        Console.WriteLine(request.ToString());
+
+                        string body = "Hello from custom C# server";
+
+                        string response =
+                            "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: text/plain\r\n" +
+                            $"Content-Length: {Encoding.ASCII.GetByteCount(body)}\r\n" +
+                            "\r\n" +
+                            body;
+
+                        byte[] msg = Encoding.ASCII.GetBytes(response);
+                        stream.Write(msg, 0, msg.Length);
+
+                        break;
+                    }
                 }
             }
         }
@@ -58,22 +74,3 @@ class Program
         Console.Read();
     }
 }
-
-/* 
-This program implements a simple TCP server that listens on the loopback IP address (127.0.0.1) and a specified port. 
-When a client connects, 
-- it accepts the TCP connection, 
-- reads a byte stream from the NetworkStream,  
-- converts the received data to uppercase, 
-- sends it back to the client. 
-
-The server runs in an infinite loop and continues accepting new connections until it is stopped.
-
-There are several limitations to this implementation:
-
-- It handles one client connection at a time, meaning additional clients must wait until the current connection is fully processed.
-- It assumes the data is encoded in ASCII, which may not support all character sets.
-- It treats each read operation as if it corresponds to a single complete message, 
-  but TCP is a stream-based protocol where data can be split across multiple reads or combined into a single read.
- 
- */
