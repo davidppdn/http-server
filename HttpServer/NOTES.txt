@@ -60,3 +60,16 @@ However, several important limitations still remain:
   Requests such as POST may contain additional body data after the header terminator sequence.
 - Although the server can now determine where HTTP headers end, it still treats the request as raw text 
   and does not yet parse the request line or headers into structured data.
+
+___________________________________________________________________________________________________________________________________________________
+ITERATION #4:
+
+Iteration 4 tackles the parsing of the HTTP request line and headers. The server now reads the request line (e.g., "GET /ping HTTP/1.1") and splits it into its components:
+method (GET),
+url (/ping),
+version (HTTP/1.1).
+
+After that, it reads the subsequent lines to parse the HTTP headers into a dictionary for easy access.
+This allows us to actually identify request types and urls, though the server still only responds to a hardcoded "/ping" endpoint and thats it.
+
+The next steps to further improve the server would be to implement support for request bodies (e.g., for POST requests).

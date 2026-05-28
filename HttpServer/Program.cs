@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using HttpServer;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
@@ -43,7 +44,9 @@ class Program
                         string fullRequest = current.Substring(0, requestEnd + 4);
                         requestBuffer.Remove(0, requestEnd + 4);
 
-                        var response = ProcessRequest(fullRequest);
+                        HttpRequest req = HttpRequest.Parse(fullRequest);
+
+                        var response = ProcessRequest(req);
                         byte[] msg = Encoding.ASCII.GetBytes(response);
 
                         stream.Write(msg, 0, msg.Length);
@@ -64,14 +67,16 @@ class Program
         Console.Read();
     }
 
-    private static string ProcessRequest(string request)
+    private static string ProcessRequest(HttpRequest request)
     {
-        Console.WriteLine(request);
+        Console.WriteLine($"Method: {request.Method}");
+        Console.WriteLine($"Path: {request.Path}");
 
-        return
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: text/plain\r\n" +
-            "\r\n" +
-            "Hello from server";
+        if (request.Path == "/ping")
+        {
+            return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\npong";
+        }
+
+        return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nnot found";
     }
 }
