@@ -33,7 +33,6 @@ class Program
                 while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
                     requestBuffer.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
-                    var remainingBodyLength = 0;
 
                     while (true)
                     {
