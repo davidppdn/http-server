@@ -1,4 +1,7 @@
-﻿namespace HttpServer;
+﻿using HttpServer.Utilities;
+using System.Text;
+
+namespace HttpServer;
 
 /// <summary>
 /// This class represents a Http Request. Each http request consists of the following:
@@ -9,6 +12,9 @@
 /// </summary>
 public class HttpRequest
 {
+    private static readonly byte[] delimiter = "\r\n\r\n"u8.ToArray();
+    private static readonly byte[] headerDelimiter = "\r\n"u8.ToArray();
+
     /// <summary>
     /// The HTTP method used by the client.
     /// This defines the type of operation the client wants to perform,
@@ -66,38 +72,69 @@ public class HttpRequest
     /// </summary>
     /// <param name="raw"></param>
     /// <returns><see cref="HttpRequest"/></returns>
-    public static HttpRequest Parse(string raw)
+    public static HttpRequest Parse(ReadOnlySpan<byte> request)
     {
-        string[] parts = raw.Split("\r\n");
+        if (request.Length == 0) throw new ArgumentOutOfRangeException(nameof(request), "Request cannot be empty");
+        
+        var requestSections = ByteArrayUtilities.Split(request,delimiter);
 
-        if (parts.Length == 0)
-            throw new Exception("Invalid HTTP request");
+        // Assume no body until Content-Length header is found.
+        if (requestSections.Count < 1)
+            throw new ArgumentOutOfRangeException(nameof(request), "Failed to split the request");
 
-        string[] requestLine = parts[0].Split(' ');
+        var headerSection = request[requestSections[0]];
+        var splitHeader = ByteArrayUtilities.Split(headerSection, headerDelimiter);
 
-        if (requestLine.Length < 3)
-            throw new Exception("Invalid HTTP request line");
+        // Assume no headers because no headers is a valid http request, but the first line is required.
+        if (splitHeader.Count < 1)
+            throw new FormatException("Invalid HTTP request: request line is missing or malformed.");
 
-        var method = requestLine[0];
-        var path = requestLine[1];
-        var version = requestLine[2];
+        var requestLineBytes = headerSection[splitHeader[0]];
+        var splitRequestLine = ByteArrayUtilities.Split(requestLineBytes, " "u8);
+
+        if (splitRequestLine.Count < 3)
+            throw new FormatException("Invalid HTTP request: request line must contain method, path, and version.");
+
+        var methodBytes = requestLineBytes[splitRequestLine[0]];
+        var method = Encoding.UTF8.GetString(methodBytes);
+
+        var pathBytes = requestLineBytes[splitRequestLine[1]];
+        var path = Encoding.UTF8.GetString(pathBytes);
+
+        var versionBytes = requestLineBytes[splitRequestLine[2]];
+        var version = Encoding.UTF8.GetString(versionBytes);
 
         var headers = new Dictionary<string, string>();
 
-        for (int i = 1; i < parts.Length; i++)
+        for (int i = 1; i < splitHeader.Count; i++)
         {
-            if (string.IsNullOrWhiteSpace(parts[i]))
-                continue;
+            var header = headerSection[splitHeader[i]];
+            var colonIndex = header.IndexOf((byte)':');
+            if (colonIndex < 0)
+                throw new Exception("Invalid HTTP request: malformed header");
 
-            int colonIndex = parts[i].IndexOf(':');
-            if (colonIndex == -1) continue;
+            var trimmedKey = ByteArrayUtilities.Trim(header[..colonIndex]);
+            var trimmedSpan = ByteArrayUtilities.Trim(header[(colonIndex + 1)..]);
 
-            string key = parts[i].Substring(0, colonIndex).Trim();
-            string value = parts[i].Substring(colonIndex + 1).Trim();
+            var key = Encoding.UTF8.GetString(trimmedKey);
+            var value = Encoding.UTF8.GetString(trimmedSpan);
 
             headers[key] = value;
         }
 
-        return new HttpRequest(method, path, version, headers, "");
+        if (requestSections.Count < 2)
+            return new HttpRequest(method, path, version, headers, "");
+
+        if (!headers.TryGetValue("Content-Length", out var contentLengthValue) || !int.TryParse(contentLengthValue, out var contentLength))
+            throw new FormatException("Invalid HTTP request: missing or invalid Content-Length header.");
+
+        var bodyBytes = request[requestSections[1]];
+        
+        if (bodyBytes.Length != contentLength)
+            throw new ArgumentException("Invalid HTTP request: body length and Content-Length value do not match.");
+
+        var body = Encoding.UTF8.GetString(bodyBytes);
+
+        return new HttpRequest(method, path, version, headers, body);        
     }
 }

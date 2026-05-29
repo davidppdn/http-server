@@ -1,4 +1,36 @@
 ___________________________________________________________________________________________________________________________________________________
+ITERATION #6:
+
+Iteration 6 improves the internal structure of the server by tightening the separation between raw TCP handling and HTTP parsing.
+
+At this stage, the server reliably:
+
+Buffers incoming TCP stream data across multiple reads
+Detects full HTTP requests using \r\n\r\n and Content-Length
+Parses headers and request bodies correctly
+Handles multiple pipelined requests in a single buffer
+
+The key change in this iteration is clarity of ownership:
+
+The socket layer only collects bytes
+The parser only operates on complete request slices
+Completed requests are removed cleanly from the buffer
+Partial requests remain queued until more data arrives
+
+This enforces a stable invariant:
+
+The buffer always contains zero or more complete HTTP requests, plus at most one incomplete tail.
+
+Limitations still remain:
+
+Single-threaded client handling
+Fixed-size buffer constraints
+No timeout or connection recovery logic
+No advanced HTTP features (keep-alive, chunked encoding)
+
+Next step: introduce concurrency and per-connection state management.
+
+___________________________________________________________________________________________________________________________________________________
 ITERATION #5:
 
 Iteration 5 tackles the parsing of the body. 
