@@ -28,7 +28,10 @@ Fixed-size buffer constraints
 No timeout or connection recovery logic
 No advanced HTTP features (keep-alive, chunked encoding)
 
-Next step: introduce concurrency and per-connection state management.
+There is currently an issue in the architecture as well. Duplicate logic in parsing, single responsibility principle has been
+thrown out the window. The server is still a monolithic blob that handles both TCP and HTTP logic in the same method, which makes it harder to maintain and extend.
+
+The next iteration will focus on re-factoring the code to separate concerns and improve maintainability.
 
 ___________________________________________________________________________________________________________________________________________________
 ITERATION #5:
