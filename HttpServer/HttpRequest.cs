@@ -9,17 +9,50 @@
 /// </summary>
 public class HttpRequest
 {
-    public string Method = "";
-    public string Path = "";
-    public string Version = "";
-    public Dictionary<string, string> Headers = new();
+    /// <summary>
+    /// The HTTP method used by the client.
+    /// This defines the type of operation the client wants to perform,
+    /// such as retrieving data (GET), sending data (POST),
+    /// replacing data (PUT), or deleting data (DELETE).
+    /// </summary>
+    public string Method { get; init; } = "";
 
-    public HttpRequest(string method, string path, string version, Dictionary<string, string> headers)
+    /// <summary>
+    /// The requested URL path.
+    /// This identifies the resource or endpoint the client is trying to access,
+    /// such as "/", "/ping", "/users", or "/index.html".
+    /// </summary>
+    public string Path { get; init; } = "";
+
+    /// <summary>
+    /// The HTTP protocol version used by the client.
+    /// This specifies which version of the HTTP protocol the request follows,
+    /// such as HTTP/1.0 or HTTP/1.1.
+    /// Different versions may support different features,
+    /// including persistent connections and chunked transfer encoding.
+    /// </summary>
+    public string Version { get; init; } = "";
+
+    /// <summary>
+    /// A collection of HTTP headers included in the request.
+    /// Headers provide additional metadata about the request,
+    /// such as the target host, accepted content types,
+    /// authentication information, content length, and connection behavior.
+    /// </summary>
+    public Dictionary<string, string> Headers { get; init; } = [];
+
+    /// <summary>
+    /// Body of the request
+    /// </summary>
+    public string Body { get; set; } = "";
+
+    public HttpRequest(string method, string path, string version, Dictionary<string, string> headers, string body)
     {
         Method = method;
         Path = path;
         Version = version;
         Headers = headers;
+        Body = body;
     }
 
     /// <summary>
@@ -32,7 +65,7 @@ public class HttpRequest
     /// 4. Return a new HttpRequest object with the parsed method, path, version and headers.
     /// </summary>
     /// <param name="raw"></param>
-    /// <returns></returns>
+    /// <returns><see cref="HttpRequest"/></returns>
     public static HttpRequest Parse(string raw)
     {
         string[] parts = raw.Split("\r\n");
@@ -65,6 +98,6 @@ public class HttpRequest
             headers[key] = value;
         }
 
-        return new HttpRequest(method, path, version, headers);
+        return new HttpRequest(method, path, version, headers, "");
     }
 }

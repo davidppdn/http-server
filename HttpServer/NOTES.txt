@@ -1,4 +1,34 @@
 ___________________________________________________________________________________________________________________________________________________
+ITERATION #5:
+
+Iteration 5 tackles the parsing of the body. 
+
+Request without body looks like this:
+
+GET /ping HTTP/1.1\r\n Host: localhost:13000\r\n User-Agent: curl/8.0\r\n Accept: */*\r\n \r\n
+
+Header with body looks like this:
+
+POST /login HTTP/1.1\r\n Host: localhost:13000\r\n Content-Type: application/json\r\n Content-Length: 33\r\n \r\n
+{"username":"bob","password":"123"}
+
+What is crucial here is that the server needs to read the Content-Length header to determine how many bytes to read for the body after the headers have been parsed.
+What is even more crucial is that the server needs to handle the case where the body data may not arrive in the same read operation as the headers.
+
+So we need to do something like this:
+
+1. Read stream data
+2. Detect header end
+3. Parse headers
+4. Check Content-Length
+5. Wait until enough body bytes arrive
+6. Extract full request
+
+There are still a few limitations in this version. It treats HTTP data as a string stream instead of raw bytes, 
+which makes Content-Length unreliable once non-ASCII content appears. It also depends on repeated full-buffer string conversions, which is inefficient. 
+Finally, TCP does not guarantee request boundaries, so headers and bodies can still arrive split across multiple reads in ways that make this logic fragile 
+as you scale or add more HTTP features.
+___________________________________________________________________________________________________________________________________________________
 ITERATION #4:
 
 Iteration 4 tackles the parsing of the HTTP request line and headers. The server now reads the request line (e.g., "GET /ping HTTP/1.1") and splits it into its components:

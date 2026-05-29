@@ -32,6 +32,7 @@ class Program
                 while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
                     requestBuffer.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
+                    var remainingBodyLength = 0;
 
                     while (true)
                     {
@@ -41,15 +42,32 @@ class Program
                         if (requestEnd == -1)
                             break;
 
-                        string fullRequest = current.Substring(0, requestEnd + 4);
-                        requestBuffer.Remove(0, requestEnd + 4);
+                        string headerPart = current.Substring(0, requestEnd + 4);
+                        var request = HttpRequest.Parse(headerPart);
 
-                        HttpRequest req = HttpRequest.Parse(fullRequest);
+                        int bodyStart = requestEnd + 4;
 
-                        var response = ProcessRequest(req);
-                        byte[] msg = Encoding.ASCII.GetBytes(response);
+                        if (!request.Headers.TryGetValue("Content-Length", out var cl))
+                        {
+                            requestBuffer.Remove(0, bodyStart);
+                            ProcessRequest(request);
+                            continue;
+                        }
 
-                        stream.Write(msg, 0, msg.Length);
+                        int contentLength = int.Parse(cl);
+
+                        int available = current.Length - bodyStart;
+
+                        if (available < contentLength)
+                            break;
+
+                        string body = current.Substring(bodyStart, contentLength);
+
+                        request.Body = body;
+
+                        requestBuffer.Remove(0, bodyStart + contentLength);
+
+                        ProcessRequest(request);
                     }
                 }
             }
@@ -66,6 +84,7 @@ class Program
         Console.WriteLine("\nHit enter to continue...");
         Console.Read();
     }
+
 
     private static string ProcessRequest(HttpRequest request)
     {
