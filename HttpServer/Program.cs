@@ -29,6 +29,7 @@ class Program
                 Byte[] buffer = new Byte[1024];
                 int bytesRead;
 
+                // this loop ends when the stream is closed => client disconnects
                 while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
                     requestBuffer.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
@@ -39,6 +40,7 @@ class Program
                         string current = requestBuffer.ToString();
                         int requestEnd = current.IndexOf("\r\n\r\n");
 
+                        // Case 1: We haven't received the full header yet, wait for more data
                         if (requestEnd == -1)
                             break;
 
@@ -47,6 +49,7 @@ class Program
 
                         int bodyStart = requestEnd + 4;
 
+                        // Case 2: We have the full header but no Content-Length, so we assume no body and process the request
                         if (!request.Headers.TryGetValue("Content-Length", out var cl))
                         {
                             requestBuffer.Remove(0, bodyStart);
@@ -58,9 +61,11 @@ class Program
 
                         int available = current.Length - bodyStart;
 
+                        // Case 3: We have the full header but not the full body yet, wait for more data
                         if (available < contentLength)
                             break;
 
+                        // Case 4: We have the full header and the full body, process the request and remove it from the buffer
                         string body = current.Substring(bodyStart, contentLength);
 
                         request.Body = body;
