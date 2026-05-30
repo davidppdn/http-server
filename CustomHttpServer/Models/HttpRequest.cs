@@ -45,4 +45,13 @@ public class HttpRequest
     /// Body of the request
     /// </summary>
     public string Body { get; set; } = "";
+
+    public HttpRequest(string method, string path, string version, Dictionary<string, string> headers, string body)
+    {
+        Method = method;
+        Path = path;
+        Version = version;
+        Headers = headers;
+        Body = body;
+    }
 }
