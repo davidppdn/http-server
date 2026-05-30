@@ -48,15 +48,62 @@ public static class HttpRequestParser
             return true;
         }
 
-        return false;
-    }
+        var headers = new Dictionary <string, string>();
 
-    private static bool skipWs(ReadOnlySpan<byte> buffer, ref int index)
-    {
-        while (index < buffer.Length && IsWs(buffer[index]))
-            index++;
-        return index < buffer.Length;
-    }
+        for (int i=1; i<lines.Count;i++)
+        {
+            var line = lines[i];
+            var headerSpan = headerPart[line];
+            var split = headerSpan.Split((byte)':');
 
-    private static bool IsWs(byte b) => b == ' ' || b == '\t';
+            if (split.Count != 2)
+                return false;
+
+            var keySpan = headerSpan[split[0]];
+            var valueSpan = headerSpan[split[1]];
+
+            var key = keySpan.Trim();
+            var value = valueSpan.Trim();
+
+            headers.Add(
+                Encoding.UTF8.GetString(key),
+                Encoding.UTF8.GetString(value)
+            );
+        }
+
+        if (!headers.TryGetValue("Content-Length", out var stringLength))
+        {
+            consumed = headerEnd + 4;
+            request = new HttpRequest
+            (
+                Encoding.UTF8.GetString(requestLineSpan[requestLinePartsFiltered[0]]),
+                Encoding.UTF8.GetString(requestLineSpan[requestLinePartsFiltered[1]]),
+                Encoding.UTF8.GetString(requestLineSpan[requestLinePartsFiltered[2]]),
+                headers,
+                string.Empty
+            );
+            return true;
+        }
+
+        var bodySize = int.Parse(stringLength);
+        var totalSize = headerEnd + 4 + bodySize;
+        var availableSize = buffer.Length;
+        
+        if (availableSize < totalSize)
+            return false;
+
+        var bodySpan = buffer[(headerEnd + 4)..totalSize];
+
+        consumed = totalSize;
+        request = new HttpRequest
+        (
+            Encoding.UTF8.GetString(requestLineSpan[requestLinePartsFiltered[0]]),
+            Encoding.UTF8.GetString(requestLineSpan[requestLinePartsFiltered[1]]),
+            Encoding.UTF8.GetString(requestLineSpan[requestLinePartsFiltered[2]]),
+            headers,
+            Encoding.UTF8.GetString(bodySpan)
+        );
+
+        return true;
+    }
 }

@@ -32,4 +32,18 @@ public static class ByteUtilities
     {
         return Split(span, new ReadOnlySpan<byte>(new[] { delimiter }));
     }
+
+    public static ReadOnlySpan<byte> Trim(this ReadOnlySpan<byte> span)
+    {
+        int start = 0;
+        int end = span.Length - 1;
+
+        while (start <= end && span[start] == (byte)' ')
+            start++;
+
+        while (end >= start && span[end] == (byte)' ')
+            end--;
+
+        return span.Slice(start, end - start + 1);
+    }
 }

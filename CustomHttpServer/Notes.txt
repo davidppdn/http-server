@@ -1,0 +1,156 @@
+___________________________________________________________________________________________________________________________________________________
+ITERATION #7:
+
+Writing HttpParsers is very annoying and hard, and the code is very easy to mess up and introduce bugs.
+That being said, so far, I have learned a lot about how TCP streams work, how to handle message fragmentation and pipelining, and how to parse HTTP requests in a robust way.
+
+There are still problems here:
+
+Single-threaded client handling
+Fixed-size buffer constraints
+No timeout or connection recovery logic
+No advanced HTTP features (keep-alive, chunked encoding)
+
+And the Http parser is still a monolithic blob that handles both TCP and HTTP logic in the same method, which makes it harder to maintain and extend.
+I will be coming back to this project periodically to refactor the code and add more features, but for now, I am happy with the progress I have made and the knowledge I have gained.
+
+___________________________________________________________________________________________________________________________________________________
+ITERATION #6:
+
+Iteration 6 improves the internal structure of the server by tightening the separation between raw TCP handling and HTTP parsing.
+
+At this stage, the server reliably:
+
+Buffers incoming TCP stream data across multiple reads
+Detects full HTTP requests using \r\n\r\n and Content-Length
+Parses headers and request bodies correctly
+Handles multiple pipelined requests in a single buffer
+
+The key change in this iteration is clarity of ownership:
+
+The socket layer only collects bytes
+The parser only operates on complete request slices
+Completed requests are removed cleanly from the buffer
+Partial requests remain queued until more data arrives
+
+This enforces a stable invariant:
+
+The buffer always contains zero or more complete HTTP requests, plus at most one incomplete tail.
+
+Limitations still remain:
+
+Single-threaded client handling
+Fixed-size buffer constraints
+No timeout or connection recovery logic
+No advanced HTTP features (keep-alive, chunked encoding)
+
+There is currently an issue in the architecture as well. Duplicate logic in parsing, single responsibility principle has been
+thrown out the window. The server is still a monolithic blob that handles both TCP and HTTP logic in the same method, which makes it harder to maintain and extend.
+
+The next iteration will focus on re-factoring the code to separate concerns and improve maintainability.
+
+___________________________________________________________________________________________________________________________________________________
+ITERATION #5:
+
+Iteration 5 tackles the parsing of the body. 
+
+Request without body looks like this:
+
+GET /ping HTTP/1.1\r\n Host: localhost:13000\r\n User-Agent: curl/8.0\r\n Accept: */*\r\n \r\n
+
+Header with body looks like this:
+
+POST /login HTTP/1.1\r\n Host: localhost:13000\r\n Content-Type: application/json\r\n Content-Length: 33\r\n \r\n
+{"username":"bob","password":"123"}
+
+What is crucial here is that the server needs to read the Content-Length header to determine how many bytes to read for the body after the headers have been parsed.
+What is even more crucial is that the server needs to handle the case where the body data may not arrive in the same read operation as the headers.
+
+So we need to do something like this:
+
+1. Read stream data
+2. Detect header end
+3. Parse headers
+4. Check Content-Length
+5. Wait until enough body bytes arrive
+6. Extract full request
+
+There are still a few limitations in this version. It treats HTTP data as a string stream instead of raw bytes, 
+which makes Content-Length unreliable once non-ASCII content appears. It also depends on repeated full-buffer string conversions, which is inefficient. 
+Finally, TCP does not guarantee request boundaries, so headers and bodies can still arrive split across multiple reads in ways that make this logic fragile 
+as you scale or add more HTTP features.
+___________________________________________________________________________________________________________________________________________________
+ITERATION #4:
+
+Iteration 4 tackles the parsing of the HTTP request line and headers. The server now reads the request line (e.g., "GET /ping HTTP/1.1") and splits it into its components:
+method (GET),
+url (/ping),
+version (HTTP/1.1).
+
+After that, it reads the subsequent lines to parse the HTTP headers into a dictionary for easy access.
+This allows us to actually identify request types and urls, though the server still only responds to a hardcoded "/ping" endpoint and thats it.
+
+The next steps to further improve the server would be to implement support for request bodies (e.g., for POST requests).
+
+___________________________________________________________________________________________________________________________________________________
+ITERATION #3:
+
+Iteration 3 tackles the issue of message pipelining by implementing a loop that repeatedly searches for 
+the HTTP header terminator sequence (\r\n\r\n) within the accumulated buffer.
+When a complete header section is detected, the request is extracted and processed, after which it is removed from the buffer. 
+The parser then loops again to check whether additional complete requests already exist within the same TCP stream data.
+The loop stops when no complete HTTP header terminator sequence can be detected in the remaining buffered data.
+
+However, several important limitations still remain:
+
+- The server still processes clients sequentially, meaning only one client can be handled at a time.
+- The parser currently assumes that the end of the HTTP headers also marks the end of the full HTTP request. 
+  This is only true for requests without a body (such as many GET requests). 
+  Requests such as POST may contain additional body data after the header terminator sequence.
+- Although the server can now determine where HTTP headers end, it still treats the request as raw text 
+  and does not yet parse the request line or headers into structured data.
+
+___________________________________________________________________________________________________________________________________________________
+ITERATION #2:
+
+The next iteration of this server tackles a key flaw in the initial design: assuming that each Read() call corresponds to a complete message.
+
+We learn that TCP does not preserve message boundaries. Instead, it provides a continuous byte stream, meaning data can arrive:
+
+split across multiple reads (message fragmentation)
+combined from multiple writes (message aggregation)
+delayed or buffered unpredictably by the OS and network stack
+
+So a single logical message (such as an HTTP request) may appear at the application level like this:
+
+Read #1: "GET /ping HT"
+Read #2: "TP/1.1\r\nHos"
+Read #3: "t: localhost\r\n\r\n"
+
+Or alternatively:
+
+Read #1: "GET /ping HTTP/1.1\r\nHost: localhost\r\n\r\nGET /time HTTP/1.1\r\n\r\n"
+
+The second iteration addresses this by introducing a buffer that accumulates incoming data until a complete HTTP request is detected, 
+for example by searching for the HTTP header terminator sequence \r\n\r\n.
+
+However, this iteration only fully handles message fragmentation (scenario 1) and does not yet handle message pipelining, 
+where multiple complete HTTP requests may arrive within a single read operation (scenario 2).
+
+___________________________________________________________________________________________________________________________________________________
+ITERATION #1:
+This program implements a simple TCP server that listens on the loopback IP address (127.0.0.1) and a specified port. 
+When a client connects, 
+- it accepts the TCP connection, 
+- reads a byte stream from the NetworkStream,  
+- converts the received data to uppercase, 
+- sends it back to the client. 
+
+The server runs in an infinite loop and continues accepting new connections until it is stopped.
+
+There are several limitations to this implementation:
+
+- It handles one client connection at a time, meaning additional clients must wait until the current connection is fully processed.
+- It assumes the data is encoded in ASCII, which may not support all character sets.
+- It treats each read operation as if it corresponds to a single complete message, 
+  but TCP is a stream-based protocol where data can be split across multiple reads or combined into a single read.
